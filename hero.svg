@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" role="img" aria-labelledby="title desc">
+  <title id="title">Paisagem estilizada do Japão</title>
+  <desc id="desc">Sol vermelho, monte Fuji, trilhos de trem e lanternas.</desc>
+  <rect width="900" height="520" fill="#f7d9bb"/>
+  <circle cx="675" cy="130" r="76" fill="#e94f37"/>
+  <path d="M0 310 210 176l130 100 90-76 170 130 96-78 204 122v146H0Z" fill="#49787e"/>
+  <path d="M188 190 342 324 30 324Z" fill="#2f5962"/>
+  <path d="M210 176 264 222 174 222Z" fill="#fffaf4"/>
+  <path d="M430 200 596 334 284 334Z" fill="#305765"/>
+  <path d="M430 200 490 250 374 250Z" fill="#fffaf4"/>
+  <path d="M0 358h900v162H0Z" fill="#263944"/>
+  <path d="M110 520 396 358h96L268 520Z" fill="#f4b942"/>
+  <path d="M790 520 506 358h-96l222 162Z" fill="#f4b942"/>
+  <path d="M390 520 454 358h22l-22 162Z" fill="#fffaf4" opacity=".78"/>
+  <path d="M512 520 486 358h22l66 162Z" fill="#fffaf4" opacity=".78"/>
+  <g fill="#1f2933">
+    <path d="M88 210h18v150H88Z"/>
+    <path d="M68 202h58v24H68Z"/>
+    <path d="M74 226h46l-8 48H82Z" fill="#e94f37"/>
+    <path d="M768 214h18v146h-18Z"/>
+    <path d="M748 206h58v24h-58Z"/>
+    <path d="M754 230h46l-8 48h-30Z" fill="#e94f37"/>
+  </g>
+</svg>
