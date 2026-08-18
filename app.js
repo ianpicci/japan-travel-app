@@ -1503,6 +1503,25 @@ function deleteStoredDocument(id) {
   return runDocumentTransaction("readwrite", (store) => store.delete(id));
 }
 
+function saveStoredDocuments(documentItems) {
+  return openDocumentsDB().then((db) => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(DOCUMENT_STORE, "readwrite");
+      const store = transaction.objectStore(DOCUMENT_STORE);
+
+      documentItems.forEach((documentItem) => store.put(documentItem));
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => {
+        db.close();
+        reject(transaction.error);
+      };
+    });
+  });
+}
+
 function formatFileSize(bytes) {
   if (bytes < 1024 * 1024) {
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -1511,11 +1530,68 @@ function formatFileSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function normalizeDocumentOrder(documentItems) {
+  const categoryIndexes = {};
+
+  return documentItems.map((item) => {
+    if (Number.isFinite(item.order)) {
+      return item;
+    }
+
+    const nextIndex = categoryIndexes[item.category] || 0;
+    categoryIndexes[item.category] = nextIndex + 1;
+    return { ...item, order: nextIndex };
+  });
+}
+
+function getCategoryDocuments(category) {
+  return documents
+    .filter((item) => item.category === category)
+    .sort((a, b) => {
+      const orderA = Number.isFinite(a.order) ? a.order : 0;
+      const orderB = Number.isFinite(b.order) ? b.order : 0;
+      return orderA - orderB;
+    });
+}
+
+function getNextDocumentOrder(category) {
+  const categoryDocuments = getCategoryDocuments(category);
+
+  if (categoryDocuments.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...categoryDocuments.map((item) => Number.isFinite(item.order) ? item.order : 0)) + 1;
+}
+
+function reorderDocument(category, fromIndex, toIndex) {
+  if (fromIndex === toIndex) {
+    return;
+  }
+
+  const categoryDocuments = getCategoryDocuments(category);
+  const [movedDocument] = categoryDocuments.splice(fromIndex, 1);
+
+  if (!movedDocument) {
+    return;
+  }
+
+  categoryDocuments.splice(toIndex, 0, movedDocument);
+  const reorderedDocuments = categoryDocuments.map((item, index) => ({ ...item, order: index }));
+  const reorderedIds = new Set(reorderedDocuments.map((item) => item.id));
+
+  documents = documents
+    .filter((item) => !reorderedIds.has(item.id))
+    .concat(reorderedDocuments);
+
+  saveStoredDocuments(reorderedDocuments).then(renderDocuments);
+}
+
 function renderDocuments() {
   documentGroups.innerHTML = "";
 
   DOCUMENT_CATEGORIES.forEach((category) => {
-    const categoryDocuments = documents.filter((item) => item.category === category);
+    const categoryDocuments = getCategoryDocuments(category);
     const section = document.createElement("section");
     section.className = "document-category";
 
@@ -1536,6 +1612,8 @@ function renderDocuments() {
     categoryDocuments.forEach((item) => {
       const listItem = document.createElement("li");
       listItem.className = "document-item";
+      listItem.dataset.category = category;
+      listItem.dataset.index = categoryDocuments.indexOf(item);
 
       const info = document.createElement("div");
       info.className = "document-name";
@@ -1556,6 +1634,7 @@ function renderDocuments() {
       deleteButton.addEventListener("click", () => removeDocument(item.id));
 
       listItem.append(info, actionMenu, deleteButton);
+      setupDocumentReorder(listItem);
       list.appendChild(listItem);
     });
 
@@ -1564,10 +1643,78 @@ function renderDocuments() {
   });
 }
 
+function setupDocumentReorder(item) {
+  let startY = 0;
+  let currentY = 0;
+  let isDragging = false;
+  let longPressTimer = 0;
+
+  item.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("button, .document-action-menu")) {
+      return;
+    }
+
+    startY = event.clientY;
+    currentY = startY;
+    isDragging = false;
+
+    longPressTimer = window.setTimeout(() => {
+      isDragging = true;
+      closeDocumentActionMenu();
+      item.classList.add("reordering");
+      item.setPointerCapture(event.pointerId);
+    }, 320);
+  });
+
+  item.addEventListener("pointermove", (event) => {
+    currentY = event.clientY;
+    const deltaY = currentY - startY;
+
+    if (!isDragging && Math.abs(deltaY) > 12) {
+      window.clearTimeout(longPressTimer);
+      return;
+    }
+
+    if (!isDragging) {
+      return;
+    }
+
+    event.preventDefault();
+    item.style.transform = `translateY(${deltaY}px)`;
+    item.classList.toggle("reorder-up", deltaY < 0);
+    item.classList.toggle("reorder-down", deltaY > 0);
+  });
+
+  item.addEventListener("pointerup", () => {
+    window.clearTimeout(longPressTimer);
+
+    if (!isDragging) {
+      return;
+    }
+
+    const category = item.dataset.category;
+    const categoryDocuments = getCategoryDocuments(category);
+    const fromIndex = Number(item.dataset.index);
+    const itemHeight = item.offsetHeight || 66;
+    const movement = Math.round((currentY - startY) / itemHeight);
+    const toIndex = Math.max(0, Math.min(categoryDocuments.length - 1, fromIndex + movement));
+
+    item.classList.remove("reordering", "reorder-up", "reorder-down");
+    item.style.transform = "";
+    reorderDocument(category, fromIndex, toIndex);
+  });
+
+  item.addEventListener("pointercancel", () => {
+    window.clearTimeout(longPressTimer);
+    item.classList.remove("reordering", "reorder-up", "reorder-down");
+    item.style.transform = "";
+  });
+}
+
 function refreshDocuments() {
   getStoredDocuments()
     .then((storedDocuments) => {
-      documents = storedDocuments.sort((a, b) => b.createdAt - a.createdAt);
+      documents = normalizeDocumentOrder(storedDocuments.sort((a, b) => b.createdAt - a.createdAt));
       renderDocuments();
     })
     .catch(() => {
@@ -1934,6 +2081,7 @@ documentForm.addEventListener("submit", (event) => {
     id: Date.now(),
     name,
     category: documentCategoryInput.value,
+    order: getNextDocumentOrder(documentCategoryInput.value),
     fileName: selectedDocumentFile.name,
     type: selectedDocumentFile.type,
     size: selectedDocumentFile.size,

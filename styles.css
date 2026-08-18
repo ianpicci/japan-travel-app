@@ -973,6 +973,25 @@ h2 {
   gap: 8px;
   min-height: 66px;
   padding: 12px;
+  transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease;
+  touch-action: pan-y;
+}
+
+.document-item.reordering {
+  position: relative;
+  z-index: 5;
+  border-color: rgba(31, 138, 138, 0.45);
+  box-shadow: 0 16px 34px rgba(31, 41, 51, 0.18);
+  opacity: 0.96;
+  touch-action: none;
+}
+
+.document-item.reorder-up {
+  box-shadow: 0 -6px 0 rgba(31, 138, 138, 0.22), 0 16px 34px rgba(31, 41, 51, 0.18);
+}
+
+.document-item.reorder-down {
+  box-shadow: 0 6px 0 rgba(31, 138, 138, 0.22), 0 16px 34px rgba(31, 41, 51, 0.18);
 }
 
 .document-name {
