@@ -1660,6 +1660,14 @@ function setupDocumentReorder(item) {
     }
   }
 
+  ["selectstart", "dragstart", "contextmenu"].forEach((eventName) => {
+    item.addEventListener(eventName, (event) => {
+      if (!event.target.closest("button, .document-action-menu")) {
+        event.preventDefault();
+      }
+    });
+  });
+
   item.addEventListener("pointerdown", (event) => {
     if (event.target.closest("button, .document-action-menu")) {
       return;

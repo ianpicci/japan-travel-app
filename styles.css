@@ -975,6 +975,14 @@ h2 {
   padding: 12px;
   transition: box-shadow 180ms ease, transform 180ms ease, border-color 180ms ease;
   touch-action: pan-y;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.document-item * {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
   -webkit-user-select: none;
   user-select: none;
 }
