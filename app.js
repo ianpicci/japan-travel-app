@@ -1648,6 +1648,17 @@ function setupDocumentReorder(item) {
   let currentY = 0;
   let isDragging = false;
   let longPressTimer = 0;
+  let scrollLocked = false;
+
+  function finishDocumentReorderGesture() {
+    item.classList.remove("reordering", "reorder-up", "reorder-down");
+    item.style.transform = "";
+
+    if (scrollLocked) {
+      scrollLocked = false;
+      unlockPageScroll();
+    }
+  }
 
   item.addEventListener("pointerdown", (event) => {
     if (event.target.closest("button, .document-action-menu")) {
@@ -1660,6 +1671,8 @@ function setupDocumentReorder(item) {
 
     longPressTimer = window.setTimeout(() => {
       isDragging = true;
+      scrollLocked = true;
+      lockPageScroll();
       closeDocumentActionMenu();
       item.classList.add("reordering");
       item.setPointerCapture(event.pointerId);
@@ -1699,15 +1712,13 @@ function setupDocumentReorder(item) {
     const movement = Math.round((currentY - startY) / itemHeight);
     const toIndex = Math.max(0, Math.min(categoryDocuments.length - 1, fromIndex + movement));
 
-    item.classList.remove("reordering", "reorder-up", "reorder-down");
-    item.style.transform = "";
+    finishDocumentReorderGesture();
     reorderDocument(category, fromIndex, toIndex);
   });
 
   item.addEventListener("pointercancel", () => {
     window.clearTimeout(longPressTimer);
-    item.classList.remove("reordering", "reorder-up", "reorder-down");
-    item.style.transform = "";
+    finishDocumentReorderGesture();
   });
 }
 

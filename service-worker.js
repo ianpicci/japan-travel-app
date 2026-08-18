@@ -1,4 +1,4 @@
-const CACHE_NAME = "japan-2026-v39";
+const CACHE_NAME = "japan-2026-v40";
 const FILES_TO_CACHE = [
   "./",
   "./index.html",
