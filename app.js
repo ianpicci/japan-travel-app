@@ -142,6 +142,7 @@ let documents = [];
 let selectedDocumentFile = null;
 let previewUrl = "";
 let openedDocumentMenu = null;
+let favoriteModalHeightLocked = false;
 let drawerDrag = null;
 let drawerOpenDrag = null;
 let drawerTouchOpenDrag = null;
@@ -317,7 +318,11 @@ function unlockPageScroll() {
 }
 
 function updateFavoriteModalHeight() {
-  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  if (favoriteModalHeightLocked) {
+    return;
+  }
+
+  const viewportHeight = window.innerHeight;
   const safeTop = 16;
   const modalHeight = Math.max(280, Math.floor(viewportHeight * 0.5) - safeTop);
   document.documentElement.style.setProperty("--favorite-modal-height", `${modalHeight}px`);
@@ -1389,7 +1394,9 @@ function openFavoriteForm(favoriteId = "") {
     favoriteNoteInput.value = favorite.note || "";
   }
 
+  favoriteModalHeightLocked = false;
   updateFavoriteModalHeight();
+  favoriteModalHeightLocked = true;
   lockPageScroll();
   favoriteModal.hidden = false;
   window.setTimeout(() => favoriteNameInput.focus(), 80);
@@ -1402,6 +1409,7 @@ function closeFavoriteForm() {
 
   favoriteModal.hidden = true;
   favoriteForm.reset();
+  favoriteModalHeightLocked = false;
   unlockPageScroll();
 }
 
@@ -1888,11 +1896,6 @@ favoriteModal.addEventListener("click", (event) => {
 });
 
 window.addEventListener("resize", updateFavoriteModalHeight);
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", updateFavoriteModalHeight);
-  window.visualViewport.addEventListener("scroll", updateFavoriteModalHeight);
-}
 
 documentFileInput.addEventListener("change", () => {
   selectedDocumentFile = documentFileInput.files[0] || null;
