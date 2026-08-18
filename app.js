@@ -1565,20 +1565,20 @@ function getNextDocumentOrder(category) {
   return Math.max(...categoryDocuments.map((item) => Number.isFinite(item.order) ? item.order : 0)) + 1;
 }
 
-function reorderDocument(category, fromIndex, toIndex) {
-  if (fromIndex === toIndex) {
-    return;
-  }
-
+function reorderDocumentsByIds(category, orderedIds) {
   const categoryDocuments = getCategoryDocuments(category);
-  const [movedDocument] = categoryDocuments.splice(fromIndex, 1);
+  const documentsById = new Map(categoryDocuments.map((item) => [String(item.id), item]));
+  const reorderedDocuments = orderedIds
+    .map((id, index) => {
+      const documentItem = documentsById.get(String(id));
+      return documentItem ? { ...documentItem, order: index } : null;
+    })
+    .filter(Boolean);
 
-  if (!movedDocument) {
+  if (reorderedDocuments.length !== categoryDocuments.length) {
     return;
   }
 
-  categoryDocuments.splice(toIndex, 0, movedDocument);
-  const reorderedDocuments = categoryDocuments.map((item, index) => ({ ...item, order: index }));
   const reorderedIds = new Set(reorderedDocuments.map((item) => item.id));
 
   documents = documents
@@ -1614,7 +1614,7 @@ function renderDocuments() {
       const listItem = document.createElement("li");
       listItem.className = "document-item";
       listItem.dataset.category = category;
-      listItem.dataset.index = categoryDocuments.indexOf(item);
+      listItem.dataset.id = item.id;
 
       const info = document.createElement("div");
       info.className = "document-name";
@@ -1649,11 +1649,48 @@ function setupDocumentReorder(item) {
   let currentY = 0;
   let isDragging = false;
   let longPressTimer = 0;
+  let dragList = null;
+  let placeholder = null;
+  let pointerOffsetY = 0;
+  let pointerId = 0;
 
-  function finishDocumentReorderGesture() {
+  function resetDocumentDragStyles() {
     item.classList.remove("reordering", "reorder-up", "reorder-down");
+    item.style.position = "";
+    item.style.left = "";
+    item.style.top = "";
+    item.style.width = "";
+    item.style.height = "";
     item.style.transform = "";
+
+    if (dragList) {
+      dragList.classList.remove("reordering-list");
+    }
+  }
+
+  function finishDocumentReorderGesture(shouldSaveOrder) {
+    const category = item.dataset.category;
+    const list = dragList;
+
+    if (placeholder?.parentElement) {
+      placeholder.replaceWith(item);
+    }
+
+    resetDocumentDragStyles();
     documentReorderScrollLocked = false;
+    isDragging = false;
+    placeholder = null;
+    dragList = null;
+
+    if (!shouldSaveOrder || !list) {
+      renderDocuments();
+      return;
+    }
+
+    const orderedIds = [...list.querySelectorAll(".document-item[data-id]")]
+      .map((documentItem) => documentItem.dataset.id);
+
+    reorderDocumentsByIds(category, orderedIds);
   }
 
   ["selectstart", "dragstart", "contextmenu"].forEach((eventName) => {
@@ -1664,6 +1701,51 @@ function setupDocumentReorder(item) {
     });
   });
 
+  function animateDocumentListChange(list, changeList) {
+    const animatedItems = [...list.querySelectorAll(".document-item:not(.reordering):not(.document-placeholder)")];
+    const firstPositions = new Map(animatedItems.map((listItem) => [listItem, listItem.getBoundingClientRect().top]));
+
+    changeList();
+
+    animatedItems.forEach((listItem) => {
+      const previousTop = firstPositions.get(listItem);
+      const currentTop = listItem.getBoundingClientRect().top;
+      const deltaY = previousTop - currentTop;
+
+      if (!deltaY) {
+        return;
+      }
+
+      listItem.style.transition = "none";
+      listItem.style.transform = `translateY(${deltaY}px)`;
+
+      requestAnimationFrame(() => {
+        listItem.style.transition = "";
+        listItem.style.transform = "";
+      });
+    });
+  }
+
+  function movePlaceholder(targetY) {
+    if (!dragList || !placeholder) {
+      return;
+    }
+
+    const siblings = [...dragList.querySelectorAll(".document-item:not(.reordering):not(.document-placeholder):not(.empty-document)")];
+    const nextItem = siblings.find((sibling) => {
+      const rect = sibling.getBoundingClientRect();
+      return targetY < rect.top + rect.height / 2;
+    });
+
+    if (nextItem === placeholder.nextElementSibling || (!nextItem && placeholder === dragList.lastElementChild)) {
+      return;
+    }
+
+    animateDocumentListChange(dragList, () => {
+      dragList.insertBefore(placeholder, nextItem || null);
+    });
+  }
+
   item.addEventListener("pointerdown", (event) => {
     if (event.target.closest("button, .document-action-menu")) {
       return;
@@ -1672,14 +1754,36 @@ function setupDocumentReorder(item) {
     startY = event.clientY;
     currentY = startY;
     isDragging = false;
+    pointerId = event.pointerId;
 
     longPressTimer = window.setTimeout(() => {
+      const itemRect = item.getBoundingClientRect();
+
       isDragging = true;
       documentReorderScrollLocked = true;
       document.getSelection()?.removeAllRanges();
       closeDocumentActionMenu();
+      dragList = item.parentElement;
+      placeholder = document.createElement("li");
+      placeholder.className = "document-item document-placeholder";
+      placeholder.style.height = `${itemRect.height}px`;
+      pointerOffsetY = startY - itemRect.top;
+
+      dragList.classList.add("reordering-list");
+      dragList.insertBefore(placeholder, item.nextSibling);
       item.classList.add("reordering");
-      item.setPointerCapture(event.pointerId);
+      item.style.position = "fixed";
+      item.style.left = `${itemRect.left}px`;
+      item.style.top = `${itemRect.top}px`;
+      item.style.width = `${itemRect.width}px`;
+      item.style.height = `${itemRect.height}px`;
+      document.body.appendChild(item);
+
+      try {
+        item.setPointerCapture(pointerId);
+      } catch {
+        // Safari can cancel pointer capture if the touch has already ended.
+      }
     }, 320);
   });
 
@@ -1697,9 +1801,10 @@ function setupDocumentReorder(item) {
     }
 
     event.preventDefault();
-    item.style.transform = `translateY(${deltaY}px)`;
+    item.style.top = `${currentY - pointerOffsetY}px`;
     item.classList.toggle("reorder-up", deltaY < 0);
     item.classList.toggle("reorder-down", deltaY > 0);
+    movePlaceholder(currentY);
   });
 
   item.addEventListener("pointerup", () => {
@@ -1709,20 +1814,14 @@ function setupDocumentReorder(item) {
       return;
     }
 
-    const category = item.dataset.category;
-    const categoryDocuments = getCategoryDocuments(category);
-    const fromIndex = Number(item.dataset.index);
-    const itemHeight = item.offsetHeight || 66;
-    const movement = Math.round((currentY - startY) / itemHeight);
-    const toIndex = Math.max(0, Math.min(categoryDocuments.length - 1, fromIndex + movement));
-
-    finishDocumentReorderGesture();
-    reorderDocument(category, fromIndex, toIndex);
+    finishDocumentReorderGesture(true);
   });
 
   item.addEventListener("pointercancel", () => {
     window.clearTimeout(longPressTimer);
-    finishDocumentReorderGesture();
+    if (isDragging) {
+      finishDocumentReorderGesture(false);
+    }
   });
 }
 
