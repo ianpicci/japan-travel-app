@@ -143,6 +143,7 @@ let selectedDocumentFile = null;
 let previewUrl = "";
 let openedDocumentMenu = null;
 let favoriteModalHeightLocked = false;
+let documentReorderScrollLocked = false;
 let drawerDrag = null;
 let drawerOpenDrag = null;
 let drawerTouchOpenDrag = null;
@@ -1648,16 +1649,11 @@ function setupDocumentReorder(item) {
   let currentY = 0;
   let isDragging = false;
   let longPressTimer = 0;
-  let scrollLocked = false;
 
   function finishDocumentReorderGesture() {
     item.classList.remove("reordering", "reorder-up", "reorder-down");
     item.style.transform = "";
-
-    if (scrollLocked) {
-      scrollLocked = false;
-      unlockPageScroll();
-    }
+    documentReorderScrollLocked = false;
   }
 
   ["selectstart", "dragstart", "contextmenu"].forEach((eventName) => {
@@ -1679,8 +1675,8 @@ function setupDocumentReorder(item) {
 
     longPressTimer = window.setTimeout(() => {
       isDragging = true;
-      scrollLocked = true;
-      lockPageScroll();
+      documentReorderScrollLocked = true;
+      document.getSelection()?.removeAllRanges();
       closeDocumentActionMenu();
       item.classList.add("reordering");
       item.setPointerCapture(event.pointerId);
@@ -1728,6 +1724,12 @@ function setupDocumentReorder(item) {
     window.clearTimeout(longPressTimer);
     finishDocumentReorderGesture();
   });
+}
+
+function preventDocumentReorderScroll(event) {
+  if (documentReorderScrollLocked) {
+    event.preventDefault();
+  }
 }
 
 function refreshDocuments() {
@@ -1969,6 +1971,8 @@ document.addEventListener("touchstart", startDrawerOpenTouch, { passive: false }
 document.addEventListener("touchmove", moveDrawerOpenTouch, { passive: false });
 document.addEventListener("touchend", finishDrawerOpenTouch);
 document.addEventListener("touchcancel", cancelDrawerOpenTouch);
+document.addEventListener("touchmove", preventDocumentReorderScroll, { passive: false });
+document.addEventListener("wheel", preventDocumentReorderScroll, { passive: false });
 
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".simple-attraction-item, .simple-day-item")) {
